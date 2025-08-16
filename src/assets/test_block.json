@@ -1,0 +1,58 @@
+{
+  "sidcoin_version": "v0.0",
+  "type": "block",
+  "index": 10,
+  "timestamp": "2025-08-10T23:35:48Z",
+  "transactions": [
+    {
+      "sidcoin_version": "v0.0",
+      "type": "transaction",
+      "block_index": 10,
+      "timestamp": "2025-08-10T23:35:48Z",
+      "sender_public_key": "-----BEGIN PUBLIC KEY-----\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAE+nimWcQ/pnBLXSbocYcGQxxt4sz/Igxk\n5ZTgo5EZL0Jfslf09Xh6nTlmOYMV8rEBIt0rIgoBgtmTOhFJJBKFjw==\n-----END PUBLIC KEY-----\n",
+      "receiver_public_key": "-----BEGIN PUBLIC KEY-----\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAE+nimWcQ/pnBLXSbocYcGQxxt4sz/Igxk\n5ZTgo5EZL0Jfslf09Xh6nTlmOYMV8rEBIt0rIgoBgtmTOhFJJBKFjw==\n-----END PUBLIC KEY-----\n",
+      "amount": 4.0,
+      "inputs": [],
+      "output1": {},
+      "output2": {},
+      "sender_signature": {
+        "r": "DB6E24C5000DD0F975DF4008A34BFD484C880FE665CD88A4AD5D01D7A938FA89",
+        "s": "40FC4417D3EEA926892E19148F40A9BBAE61E2D5A13A68A9DAAC65FDC0844C32"
+      }
+    },
+    {
+      "sidcoin_version": "v0.0",
+      "type": "transaction",
+      "block_index": 10,
+      "timestamp": "2025-08-10T23:35:48Z",
+      "sender_public_key": "-----BEGIN PUBLIC KEY-----\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAE+nimWcQ/pnBLXSbocYcGQxxt4sz/Igxk\n5ZTgo5EZL0Jfslf09Xh6nTlmOYMV8rEBIt0rIgoBgtmTOhFJJBKFjw==\n-----END PUBLIC KEY-----\n",
+      "receiver_public_key": "-----BEGIN PUBLIC KEY-----\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAE+nimWcQ/pnBLXSbocYcGQxxt4sz/Igxk\n5ZTgo5EZL0Jfslf09Xh6nTlmOYMV8rEBIt0rIgoBgtmTOhFJJBKFjw==\n-----END PUBLIC KEY-----\n",
+      "amount": 4.0,
+      "inputs": [],
+      "output1": {},
+      "output2": {},
+      "sender_signature": {
+        "r": "DB6E24C5000DD0F975DF4008A34BFD484C880FE665CD88A4AD5D01D7A938FA89",
+        "s": "40FC4417D3EEA926892E19148F40A9BBAE61E2D5A13A68A9DAAC65FDC0844C32"
+      }
+    },
+    {
+      "sidcoin_version": "v0.0",
+      "type": "transaction",
+      "block_index": 10,
+      "timestamp": "2025-08-10T23:35:48Z",
+      "sender_public_key": "-----BEGIN PUBLIC KEY-----\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAE+nimWcQ/pnBLXSbocYcGQxxt4sz/Igxk\n5ZTgo5EZL0Jfslf09Xh6nTlmOYMV8rEBIt0rIgoBgtmTOhFJJBKFjw==\n-----END PUBLIC KEY-----\n",
+      "receiver_public_key": "-----BEGIN PUBLIC KEY-----\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAE+nimWcQ/pnBLXSbocYcGQxxt4sz/Igxk\n5ZTgo5EZL0Jfslf09Xh6nTlmOYMV8rEBIt0rIgoBgtmTOhFJJBKFjw==\n-----END PUBLIC KEY-----\n",
+      "amount": 4.0,
+      "inputs": [],
+      "output1": {},
+      "output2": {},
+      "sender_signature": {
+        "r": "DB6E24C5000DD0F975DF4008A34BFD484C880FE665CD88A4AD5D01D7A938FA89",
+        "s": "40FC4417D3EEA926892E19148F40A9BBAE61E2D5A13A68A9DAAC65FDC0844C32"
+      }
+    }
+  ],
+  "nonce": 23,
+  "prev_hash": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3"
+}
