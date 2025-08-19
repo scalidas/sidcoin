@@ -15,6 +15,10 @@
 #include "transaction_output.h"
 #include "crypto/ecdsa.h"
 
+namespace block {
+	class Block;
+}
+
 namespace transaction {
 
 	struct serialized_transaction_with_signature {
@@ -56,6 +60,8 @@ namespace transaction {
 
 			friend serialized_transaction_with_signature* serialize_transaction_with_signature(Transaction transaction);
 			friend serialized_transaction_without_signature* serialize_transaction_without_signature(Transaction transaction);
+
+			friend class block::Block;
 
 
 		

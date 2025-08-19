@@ -32,12 +32,15 @@ namespace block {
 			Block(nlohmann::json block_json);
 
 			bool isValid();
+			bool checkNonce();
 
-			friend serialized_block* serialize_block(Block block);
+			void setNonce(int nonce);
+
+			friend serialized_block* serialize_block(const block::Block& block);
 			
 	};
 
-	serialized_block* serialize_block(Block block);
+	serialized_block* serialize_block(const block::Block& block);
 }
 
 #endif

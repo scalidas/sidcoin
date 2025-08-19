@@ -22,7 +22,7 @@ file(GLOB_RECURSE ALL_SOURCE_FILES
     CONFIGURE_DEPENDS
     "${SOURCE_DIR}/*.cpp"
 )
-add_executable(sidcoin ${ALL_SOURCE_FILES})
+add_executable(sidcoin ${ALL_SOURCE_FILES} "src/mining/mining.cpp" "include/mining/mining.h")
 
 target_link_libraries(sidcoin PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 

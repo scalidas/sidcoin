@@ -39,14 +39,55 @@ bool block::Block::isValid() {
 	}
 
 	//Check that first transaction is valid
-	/*if (transactions_[0].amount_) {
+	if (transactions_[0].amount_ != MINING_REWARD) {
+		return false;
+	}
 
-	}*/
-
+	//Check sender of first transactions is all 0
+	std::array<uint8_t, EC_PUBLIC_KEY_SIZE_UNCOMPRESSED> buffer;
+	crypto::write_public_key_to_buffer(transactions_[0].sender_public_key_, buffer);
+	for (uint8_t byte : buffer) {
+		if (byte != 0) {
+			return false;
+		}
+	}
+	
 	//Check that all transactions are valid
+	for (transaction::Transaction tx: transactions_) {
+		if (!tx.isValid()) {
+			return false;
+		}
+	}
+
+	//Check that serialized hash contains correct number of leading zeros
+	checkNonce();
 }
 
-block::serialized_block* block::serialize_block(block::Block block) {
+void block::Block::setNonce(int nonce) {
+	nonce_ = nonce;
+}
+
+bool block::Block::checkNonce() {
+	serialized_block* serialized_bk = serialize_block(*this);
+
+	int ret = 0;
+	std::array<unsigned char, SHA256_DIGEST_LENGTH> hash = crypto::sha256_block(serialized_bk, ret);
+	if (ret != 0) {
+		return false;
+	}
+
+	delete serialized_bk;
+
+	for (int i = 0; i < NUM_LEADING_ZEROS_HASH; i++) {
+		if (hash[i] != 0) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+block::serialized_block* block::serialize_block(const block::Block& block) {
 	serialized_block* serialized_bk = new serialized_block();
 
 	serialized_bk->prev_hash = block.prev_hash_;

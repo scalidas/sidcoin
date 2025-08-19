@@ -6,6 +6,7 @@
 
 #include "crypto/sha256.h"
 #include "transaction/transaction.h"
+#include "block/block.h"
 
 
 std::vector<unsigned char> crypto::sha256(const std::string& input, int& ret) {
@@ -37,6 +38,17 @@ std::array<unsigned char, SHA256_DIGEST_LENGTH> crypto::sha256_transaction_witho
 std::array<unsigned char, SHA256_DIGEST_LENGTH> crypto::sha256_transaction_with_signature(transaction::serialized_transaction_with_signature* input, int& ret) {
     std::array<unsigned char, SHA256_DIGEST_LENGTH> hash;
     unsigned char* hash_ret = SHA256(reinterpret_cast<const unsigned char*>(input), sizeof(transaction::serialized_transaction_with_signature), hash.data());
+
+    if (hash_ret != hash.data()) {
+        ret = -1;
+    }
+
+    return hash;
+}
+
+std::array<unsigned char, SHA256_DIGEST_LENGTH> crypto::sha256_block(block::serialized_block* input, int& ret) {
+    std::array<unsigned char, SHA256_DIGEST_LENGTH> hash;
+    unsigned char* hash_ret = SHA256(reinterpret_cast<const unsigned char*>(input), sizeof(block::serialized_block), hash.data());
 
     if (hash_ret != hash.data()) {
         ret = -1;
