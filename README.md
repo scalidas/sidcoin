@@ -3,6 +3,21 @@
 Proof of work cryptocurrency implementing my own version of Bitcoin protocol for simplicity. Uses OpenSSL for SHA256 and ECDSA implementation.
 
 
+## Progress
+
+#### Completed
+
+- Protocol written
+- Block, transaction validation
+- ECDSA and SHA256 implementation wrappers
+- Serializing objects into buffers for hashing and mining according to protocol
+- Single threaded mining
+
+#### In progress
+
+- Blockchain fork and traversal algorithms
+- Optimal transaction generation
+
 ## References
 
 https://michaelnielsen.org/ddi/how-the-bitcoin-protocol-actually-works/

@@ -5,6 +5,7 @@
 #include <string>
 
 #include <openssl/sha.h>
+#include "sidcoin_constants.h"
 
 namespace transaction
 {
@@ -19,12 +20,16 @@ namespace block
 
 namespace crypto
 {
+	using sha256_hash = std::array<unsigned char, SHA256_HASH_SIZE>;
+
 	std::vector<unsigned char> sha256(const std::string& input, int& ret);
 
-	std::array<unsigned char, SHA256_DIGEST_LENGTH> sha256_transaction_without_signature(transaction::serialized_transaction_without_signature* input, int& ret);
-	std::array<unsigned char, SHA256_DIGEST_LENGTH> sha256_transaction_with_signature(transaction::serialized_transaction_with_signature* input, int& ret);
+	crypto::sha256_hash sha256_transaction_without_signature(transaction::serialized_transaction_without_signature* input, int& ret);
+	crypto::sha256_hash sha256_transaction_with_signature(transaction::serialized_transaction_with_signature* input, int& ret);
 
-	std::array<unsigned char, SHA256_DIGEST_LENGTH> sha256_block(block::serialized_block* input, int& ret);
+	crypto::sha256_hash sha256_block(block::serialized_block* input, int& ret);
+
+	
 }
 
 #endif

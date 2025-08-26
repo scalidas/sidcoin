@@ -13,9 +13,16 @@
 #include "sidcoin_constants.h"
 #include "crypto/sha256.h"
 
+//Forward declare transaction structs
+namespace transaction
+{
+    struct serialized_transaction_without_signature;
+    struct serialized_transaction_with_signature;
+}
+
 namespace crypto {
-    const std::string DEFAULT_PRIVATE_KEY_FILE = "SIDCOIN_ecdsa_secp256k1_private_key.pem";
-    const std::string DEFAULT_PUBLIC_KEY_FILE = "SIDCOIN_ecdsa_secp256k1_public_key.pem";
+    const std::string DEFAULT_PRIVATE_KEY_FILE = "sidcoin_files/SIDCOIN_ecdsa_secp256k1_private_key.pem";
+    const std::string DEFAULT_PUBLIC_KEY_FILE = "sidcoin_files/SIDCOIN_ecdsa_secp256k1_public_key.pem";
 
     EC_KEY* generate_ecdsa_key_pair();
 
@@ -23,15 +30,19 @@ namespace crypto {
 
     bool save_ec_public_key(const EC_KEY* eckey, const std::string& filename);
 
+    std::string ec_key_public_key_to_str(const EC_KEY* eckey);
+
     void free_ec_key(const EC_KEY* eckey);
 
     void free_ecdsa_sig(const ECDSA_SIG* signature);
 
-    ECDSA_SIG* sign_message(const std::string& message, EC_KEY* eckey);
+    ECDSA_SIG* sign_message_str(const std::string& message, EC_KEY* eckey);
+
+    ECDSA_SIG* sign_transaction(transaction::serialized_transaction_without_signature* message, EC_KEY* eckey);
 
     int verify_signature_string(const std::string& message, ECDSA_SIG* signature, EC_KEY* eckey);
 
-    int verify_signature_hash(const std::array<unsigned char, SHA256_HASH_SIZE> message, ECDSA_SIG* signature, EC_KEY* eckey);
+    int verify_signature_hash(crypto::sha256_hash message, ECDSA_SIG* signature, EC_KEY* eckey);
 
     int load_ecdsa_private_key_from_file(const std::string& filename, EC_KEY* eckey);
 

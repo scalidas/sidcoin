@@ -7,7 +7,7 @@
 namespace transaction {
 	class TransactionOutput {
 	private:
-		std::string transaction_hash_;
+		crypto::sha256_hash transaction_hash_;
 		double amount_;
 
 	public:

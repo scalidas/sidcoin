@@ -13,6 +13,8 @@
 #include "crypto/sha256.h"
 #include "crypto/ecdsa.h"
 
+#include "transaction/transaction.h"
+
 //Generate and return OpenSSH ecdsa key
 EC_KEY* crypto::generate_ecdsa_key_pair() {
     int ret;
@@ -78,7 +80,7 @@ void crypto::free_ecdsa_sig(const ECDSA_SIG* signature) {
 }
 
 //Sign a string message
-ECDSA_SIG* crypto::sign_message(const std::string& message, EC_KEY* eckey) {
+ECDSA_SIG* crypto::sign_message_str(const std::string& message, EC_KEY* eckey) {
     int ret = 0;
     std::vector<unsigned char> hash = crypto::sha256(message, ret);
     if (ret == -1) {
@@ -89,6 +91,18 @@ ECDSA_SIG* crypto::sign_message(const std::string& message, EC_KEY* eckey) {
     return signature;
 }
 
+//Sign a transaction
+ECDSA_SIG* crypto::sign_transaction(transaction::serialized_transaction_without_signature* message, EC_KEY* eckey) {
+    int ret = 0;
+    std::array<unsigned char, SHA256_HASH_SIZE> hash = crypto::sha256_transaction_without_signature(message, ret);
+    if (ret == -1) {
+        return NULL;
+    }
+
+    ECDSA_SIG* signature = ECDSA_do_sign(reinterpret_cast<const unsigned char*>(&message), sizeof(transaction::serialized_transaction_without_signature), eckey);
+    return signature;
+}
+
 //Verify that a signature is valid for the given message
 int crypto::verify_signature_string(const std::string& message, ECDSA_SIG* signature, EC_KEY* eckey) {
 
@@ -96,7 +110,7 @@ int crypto::verify_signature_string(const std::string& message, ECDSA_SIG* signa
 }
 
 //Verify that a signature is valid for the given message
-int crypto::verify_signature_hash(const std::array<unsigned char, SHA256_HASH_SIZE> message, ECDSA_SIG* signature, EC_KEY* eckey) {
+int crypto::verify_signature_hash(crypto::sha256_hash message, ECDSA_SIG* signature, EC_KEY* eckey) {
    
     return ECDSA_do_verify(reinterpret_cast<const unsigned char*>(message.data()), message.size(), signature, eckey);
 }

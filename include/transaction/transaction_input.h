@@ -4,10 +4,12 @@
 #include <string>
 #include <nlohmann/json.hpp>
 
+#include "crypto/sha256.h"
+
 namespace transaction {
 	class TransactionInput {
 	private:
-		std::string transaction_hash_;
+		 crypto::sha256_hash transaction_hash_;
 		int output_index_;
 
 	public:

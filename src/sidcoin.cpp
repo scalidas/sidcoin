@@ -46,27 +46,28 @@ int main() {
     //int signature_isvalid = crypto::verify_signature(message, signature, new_key);
     //std::cout << "Signature valid: " << signature_isvalid << std::endl;
 
-    //crypto::save_ec_private_key(new_key, "SIDCOIN_ecdsa_secp256k1_private_key.pem");
-    //crypto::save_ec_public_key(new_key, "SIDCOIN_ecdsa_secp256k1_public_key.pem");
+    //crypto::save_ec_private_key(new_key, crypto::DEFAULT_PRIVATE_KEY_FILE);
+    //crypto::save_ec_public_key(new_key, crypto::DEFAULT_PUBLIC_KEY_FILE);
     //
     //crypto::free_ec_key(new_key);
     //
 
-    //new_key = crypto::generate_ecdsa_key_pair();
-    //ret = crypto::load_ecdsa_private_key_from_file(crypto::DEFAULT_PRIVATE_KEY_FILE, new_key);
-    //if (ret != 0) {
-    //    std::cout << "Failed to load private key" << std::endl;
-    //}
+    int ret = 0;
+    EC_KEY* new_key = crypto::generate_ecdsa_key_pair();
+    ret = crypto::load_ecdsa_private_key_from_file(crypto::DEFAULT_PRIVATE_KEY_FILE, new_key);
+    if (ret != 0) {
+        std::cout << "Failed to load private key" << std::endl;
+    }
 
-    //ret = crypto::load_ecdsa_public_key_from_file(crypto::DEFAULT_PUBLIC_KEY_FILE, new_key);
-    //if (ret != 0) {
-    //    std::cout << "Failed to load public key" << std::endl;
-    //}
-    //
-    //ret = EC_KEY_check_key(new_key);
-    //if (ret != 1) {
-    //    std::cout << "Problem with key" << std::endl;
-    //}
+    ret = crypto::load_ecdsa_public_key_from_file(crypto::DEFAULT_PUBLIC_KEY_FILE, new_key);
+    if (ret != 0) {
+        std::cout << "Failed to load public key" << std::endl;
+    }
+    
+    ret = EC_KEY_check_key(new_key);
+    if (ret != 1) {
+        std::cout << "Problem with key" << std::endl;
+    }
 
     //signature_isvalid = crypto::verify_signature(message, signature, new_key);
     //std::cout << "Signature valid: " << signature_isvalid << std::endl;
@@ -136,6 +137,19 @@ int main() {
 
         delete serialized_tx;
         delete serialized_bk;
+
+        transaction::serialized_transaction_without_signature* serialized_tx2 = transaction::serialize_transaction_without_signature(tx);
+
+        ECDSA_SIG* sig = crypto::sign_transaction(serialized_tx2, new_key);
+
+        int ret = 0;
+        std::cout << "Signature: " << crypto::ecdsa_signature_r_as_hex_string(sig) << "  " << crypto::ecdsa_signature_s_as_hex_string(sig) << "is valid: " << crypto::verify_signature_hash(crypto::sha256_transaction_without_signature(serialized_tx2, ret), sig, new_key) << std::endl;
+
+        delete serialized_tx2;
+        crypto::free_ecdsa_sig(sig);
+
+        std::cout << "Transaction isValid(): " << tx.isValid() << std::endl;
+        std::cout << "Block isValid(): " << bk.isValid() << std::endl;
     }
     catch (std::exception e) {
         std::cout << e.what();
