@@ -2,7 +2,7 @@
 #define MINING_MINING_H
 
 #include "block/block.h"
-#include "sidcoin_constants.h"
+#include "constants.h"
 
 namespace mining {
 

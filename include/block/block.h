@@ -4,9 +4,14 @@
 #include <chrono>
 #include <string>
 #include <vector>
+#include <optional>
 
-#include "sidcoin_constants.h"
+#include "constants.h"
 #include "transaction/transaction.h"
+
+namespace blockchain {
+	class Blockchain;
+}
 
 namespace block {
 	struct serialized_block {
@@ -31,16 +36,18 @@ namespace block {
 		public:
 			Block(nlohmann::json block_json);
 
-			bool isValid();
-			bool checkNonce();
+			bool isValid() const;
+			bool checkNonce() const;
 
 			void setNonce(int nonce);
 
-			friend serialized_block* serialize_block(const block::Block& block);
-			
-	};
+			friend std::optional<serialized_block> serialize_block(const block::Block& block);
+			friend class blockchain::Blockchain;
 
-	serialized_block* serialize_block(const block::Block& block);
+			friend bool operator<(const Block& left, const Block& right);
+		};
+
+	std::optional<serialized_block> serialize_block(const block::Block& block);
 }
 
 #endif

@@ -7,7 +7,7 @@
 #include <sstream>
 #include <string>
 
-#include "sidcoin_constants.h"
+#include "constants.h"
 
 namespace utilities {
 	
@@ -17,6 +17,9 @@ namespace utilities {
 
 	// Get a ISO 9601 timestamp string for right now
 	std::string get_current_utc_timestamp_str();
+
+	//Turn a given time point into a string
+	std::string get_utc_timestamp_str(std::chrono::system_clock::time_point timepoint);
 
 	// Parse ISO 8601 timestamp string back into time_point
 	std::chrono::system_clock::time_point parse_utc_timestamp_str(const std::string& timestamp_str);

@@ -3,6 +3,9 @@
 
 #include <iostream>
 #include <string>
+#include <memory>
+#include <optional>
+#include <array>
 
 #include <openssl/ecdsa.h>
 #include <openssl/evp.h>
@@ -10,55 +13,81 @@
 #include <openssl/bio.h>
 #include <openssl/ec.h>
 
-#include "sidcoin_constants.h"
+#include "constants.h"
 #include "crypto/sha256.h"
 
-//Forward declare transaction structs
-namespace transaction
-{
+namespace transaction {
     struct serialized_transaction_without_signature;
-    struct serialized_transaction_with_signature;
 }
 
 namespace crypto {
+    struct EC_KEY_Deleter {
+        void operator()(EC_KEY* key) const {
+            if (key) EC_KEY_free(key);
+        }
+    };
+    using eckey_ptr = std::unique_ptr<EC_KEY, EC_KEY_Deleter>;
+
+    struct ECDSA_SIG_Deleter {
+        void operator()(ECDSA_SIG* sig) const {
+            if (sig) ECDSA_SIG_free(sig);
+        }
+    };
+    using ecdsa_sig_ptr = std::unique_ptr<ECDSA_SIG, ECDSA_SIG_Deleter>;
+
     const std::string DEFAULT_PRIVATE_KEY_FILE = "sidcoin_files/SIDCOIN_ecdsa_secp256k1_private_key.pem";
     const std::string DEFAULT_PUBLIC_KEY_FILE = "sidcoin_files/SIDCOIN_ecdsa_secp256k1_public_key.pem";
 
-    EC_KEY* generate_ecdsa_key_pair();
+    class ECDSASignature {
+    public:
+        ECDSASignature() = default;
+        ECDSASignature(const ECDSASignature& other);
+        ECDSASignature& operator=(const ECDSASignature& other);
+        ECDSASignature(ECDSASignature&&) noexcept = default;
+        ECDSASignature& operator=(ECDSASignature&&) noexcept = default;
 
-    bool save_ec_private_key(const EC_KEY* eckey, const std::string& filename);
+        static std::optional<ECDSASignature> fromHexStrings(const std::string& r_str, const std::string& s_str);
+        std::optional<std::string> rHex() const;
+        std::optional<std::string> sHex() const;
+        bool writeToBuffer(std::array<uint8_t, ECDSA_SIGNATURE_SIZE>& buffer) const;
+        bool isValid() const;
+        const ECDSA_SIG* get() const;
 
-    bool save_ec_public_key(const EC_KEY* eckey, const std::string& filename);
+    private:
+        explicit ECDSASignature(ecdsa_sig_ptr signature);
+        ecdsa_sig_ptr signature_;
+        friend class ECDSAKey;
+    };
 
-    std::string ec_key_public_key_to_str(const EC_KEY* eckey);
+    class ECDSAKey {
+    public:
+        ECDSAKey() = default;
+        ECDSAKey(const ECDSAKey& other);
+        ECDSAKey& operator=(const ECDSAKey& other);
+        ECDSAKey(ECDSAKey&&) noexcept = default;
+        ECDSAKey& operator=(ECDSAKey&&) noexcept = default;
 
-    void free_ec_key(const EC_KEY* eckey);
+        static std::optional<ECDSAKey> generateKeyPair();
+        static std::optional<ECDSAKey> loadPrivateKeyFromFile(const std::string& filename);
+        static std::optional<ECDSAKey> loadPublicKeyFromFile(const std::string& filename);
+        static std::optional<ECDSAKey> loadPublicKeyFromString(const std::string& public_key);
 
-    void free_ecdsa_sig(const ECDSA_SIG* signature);
+        bool savePrivateKey(const std::string& filename) const;
+        bool savePublicKey(const std::string& filename) const;
 
-    ECDSA_SIG* sign_message_str(const std::string& message, EC_KEY* eckey);
+        std::optional<ECDSASignature> signHash(const SHA256Hash& message_hash) const;
+        std::optional<ECDSASignature> signTransaction(const transaction::serialized_transaction_without_signature& message) const;
 
-    ECDSA_SIG* sign_transaction(transaction::serialized_transaction_without_signature* message, EC_KEY* eckey);
+        bool verifySignature(const ECDSASignature& signature, const SHA256Hash& message_hash) const;
+        bool writePublicKeyToBuffer(std::array<uint8_t, EC_PUBLIC_KEY_SIZE_UNCOMPRESSED>& buffer) const;
 
-    int verify_signature_string(const std::string& message, ECDSA_SIG* signature, EC_KEY* eckey);
+        const EC_KEY* get() const;
+        bool isValid() const;
 
-    int verify_signature_hash(crypto::sha256_hash message, ECDSA_SIG* signature, EC_KEY* eckey);
-
-    int load_ecdsa_private_key_from_file(const std::string& filename, EC_KEY* eckey);
-
-    int load_ecdsa_public_key_from_file(const std::string& filename, EC_KEY* eckey);
-
-    int load_ecdsa_public_key_from_string(const std::string& publickey, EC_KEY* eckey);
-
-    std::string ecdsa_signature_r_as_hex_string(ECDSA_SIG* signature);
-
-    std::string ecdsa_signature_s_as_hex_string(ECDSA_SIG* signature);
-
-    ECDSA_SIG* ecdsa_signature_from_hex_strings(const std::string& r_str, const std::string& s_str);
-
-    int write_public_key_to_buffer(EC_KEY* ec_key, std::array<uint8_t, EC_PUBLIC_KEY_SIZE_UNCOMPRESSED>& buffer);
-
-    int write_signature_to_buffer(ECDSA_SIG* signature, std::array<uint8_t, ECDSA_SIGNATURE_SIZE>& buffer);
-
+    private:
+        explicit ECDSAKey(eckey_ptr key);
+        eckey_ptr key_;
+    };
 }
+
 #endif

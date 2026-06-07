@@ -6,125 +6,117 @@
 #include "transaction/transaction.h"
 #include "utilities/timestamps.h"
 #include "utilities/miscellaneous.h"
-#include "sidcoin_constants.h"
+#include "constants.h"
+#include "crypto/sha256.h"
 
 block::Block::Block(nlohmann::json block_json) {
-	sidcoin_version_ = block_json["sidcoin_version"];
-	index_ = block_json["index"];
-	timestamp_ = utilities::parse_utc_timestamp_str(block_json["timestamp"]);
-	
-	int num_transactions = block_json["transactions"].size();
-	if (num_transactions != NUM_TRANSACTIONS_PER_BLOCK) {
-		throw std::exception("Incorrect number of transactions");
-	}
+    sidcoin_version_ = block_json["sidcoin_version"];
+    index_ = block_json["index"];
+    timestamp_ = utilities::parse_utc_timestamp_str(block_json["timestamp"]);
 
-	for (int i = 0; i < num_transactions; i++) {
-		transaction::Transaction tx = transaction::Transaction(block_json["transactions"][i]);
-		transactions_.push_back(tx);
-	}
+    int num_transactions = block_json["transactions"].size();
+    if (num_transactions != NUM_TRANSACTIONS_PER_BLOCK) {
+        throw std::runtime_error("Incorrect number of transactions");
+    }
 
-	nonce_ = block_json["nonce"];
+    for (int i = 0; i < num_transactions; i++) {
+        auto tx_opt = transaction::Transaction::from_json(block_json["transactions"][i]);
+        transaction::Transaction tx = tx_opt.value();
+        transactions_.push_back(std::move(tx));
+    }
 
+    nonce_ = block_json["nonce"];
 
-	std::vector prev_hash_vec = utilities::hex_string_to_bytes(block_json["prev_hash"]);
-	if (prev_hash_vec.size() != SHA256_HASH_SIZE) {
-		throw std::exception("Error loading hash");
-	}
+    std::vector<uint8_t> prev_hash_vec = utilities::hex_string_to_bytes(block_json["prev_hash"]);
+    if (prev_hash_vec.size() != SHA256_HASH_SIZE) {
+        throw std::runtime_error("Error loading hash");
+    }
+
+    std::copy(prev_hash_vec.begin(), prev_hash_vec.end(), prev_hash_.begin());
 }
 
-bool block::Block::isValid() {
-	//Check that number of transactions is correct
-	if (transactions_.size() != NUM_TRANSACTIONS_PER_BLOCK) {
-		return false;
-	}
+bool block::Block::isValid() const {
+    if (transactions_.size() != NUM_TRANSACTIONS_PER_BLOCK) {
+        return false;
+    }
 
-	//Check that first transaction is valid
-	if (transactions_[0].amount_ != MINING_REWARD) {
-		return false;
-	}
+    if (transactions_[0].amount_ != MINING_REWARD) {
+        return false;
+    }
 
-	//Check sender of first transactions is all 0
-	std::array<uint8_t, EC_PUBLIC_KEY_SIZE_UNCOMPRESSED> buffer;
-	crypto::write_public_key_to_buffer(transactions_[0].sender_public_key_, buffer);
-	for (uint8_t byte : buffer) {
-		if (byte != 0) {
-			return false;
-		}
-	}
-	
-	//Check that all transactions are valid
-	for (transaction::Transaction tx: transactions_) {
-		if (!tx.isValid()) {
-			return false;
-		}
-	}
+    std::array<uint8_t, EC_PUBLIC_KEY_SIZE_UNCOMPRESSED> buffer{};
+    if (!transactions_[0].sender_public_key_.writePublicKeyToBuffer(buffer)) {
+        return false;
+    }
 
-	//Check that serialized hash contains correct number of leading zeros
-	checkNonce();
+    for (uint8_t byte : buffer) {
+        if (byte != 0) {
+            return false;
+        }
+    }
+
+    for (const transaction::Transaction& tx : transactions_) {
+        if (!tx.isValid()) {
+            return false;
+        }
+    }
+
+    return checkNonce();
 }
 
 void block::Block::setNonce(int nonce) {
-	nonce_ = nonce;
+    nonce_ = nonce;
 }
 
-bool block::Block::checkNonce() {
-	serialized_block* serialized_bk = serialize_block(*this);
-
-	int ret = 0;
-	std::array<unsigned char, SHA256_DIGEST_LENGTH> hash = crypto::sha256_block(serialized_bk, ret);
-	if (ret != 0) {
-		return false;
-	}
-
-	delete serialized_bk;
-
-	for (int i = 0; i < NUM_LEADING_ZEROS_HASH; i++) {
-		if (hash[i] != 0) {
-			return false;
-		}
-	}
-
-	return true;
+bool block::operator<(const block::Block& left, const block::Block& right) {
+    return left.nonce_ < right.nonce_;
 }
 
-block::serialized_block* block::serialize_block(const block::Block& block) {
-	serialized_block* serialized_bk = new serialized_block();
+bool block::Block::checkNonce() const {
+    auto serialized_bk_opt = serialize_block(*this);
+    if (!serialized_bk_opt) {
+        return false;
+    }
 
-	serialized_bk->prev_hash = block.prev_hash_;
-	
-	utilities::write_timestamp_to_buffer(block.timestamp_, serialized_bk->timestamp);
+    auto hash_opt = crypto::SHA256Hash::hash(*serialized_bk_opt);
+    if (!hash_opt) {
+        return false;
+    }
 
-	std::memcpy(&(serialized_bk->nonce), &block.nonce_, NONCE_SIZE);
+    for (int i = 0; i < NUM_LEADING_ZEROS_HASH; i++) {
+        if (hash_opt->data()[i] != 0) {
+            return false;
+        }
+    }
 
-	transaction::serialized_transaction_with_signature* tx1 = serialize_transaction_with_signature(block.transactions_[0]);
-	if (tx1 == NULL) {
-		delete serialized_bk;
-		return NULL;
-	}
+    return true;
+}
 
-	transaction::serialized_transaction_with_signature* tx2 = serialize_transaction_with_signature(block.transactions_[1]);
-	if (tx2 == NULL) {
-		delete serialized_bk;
-		delete tx1;
-		return NULL;
-	}
-	
-	transaction::serialized_transaction_with_signature* tx3 = serialize_transaction_with_signature(block.transactions_[2]);
-	if (tx3 == NULL) {
-		delete serialized_bk;
-		delete tx1;
-		delete tx2;
-		return NULL;
-	}
-	
+std::optional<block::serialized_block> block::serialize_block(const block::Block& block) {
+    serialized_block serialized_bk;
+    serialized_bk.prev_hash = block.prev_hash_;
 
-	serialized_bk->tx1 = *(tx1);
-	serialized_bk->tx2 = *(tx2);
-	serialized_bk->tx3 = *(tx3);
+    utilities::write_timestamp_to_buffer(block.timestamp_, serialized_bk.timestamp);
+    std::memcpy(serialized_bk.nonce.data(), &block.nonce_, NONCE_SIZE);
 
-	delete tx1;
-	delete tx2;
-	delete tx3;
+    auto tx1 = block.transactions_[0].serialize_transaction_with_signature();
+    if (!tx1) {
+        return std::nullopt;
+    }
 
-	return serialized_bk;
+    auto tx2 = block.transactions_[1].serialize_transaction_with_signature();
+    if (!tx2) {
+        return std::nullopt;
+    }
+
+    auto tx3 = block.transactions_[2].serialize_transaction_with_signature();
+    if (!tx3) {
+        return std::nullopt;
+    }
+
+    serialized_bk.tx1 = *tx1;
+    serialized_bk.tx2 = *tx2;
+    serialized_bk.tx3 = *tx3;
+
+    return serialized_bk;
 }

@@ -2,6 +2,8 @@
 #include <string>
 #include <sstream>
 #include <array>
+#include <optional>
+#include <vector>
 
 #include <openssl/ecdsa.h>
 #include <openssl/evp.h>
@@ -12,293 +14,378 @@
 
 #include "crypto/sha256.h"
 #include "crypto/ecdsa.h"
-
 #include "transaction/transaction.h"
 
-//Generate and return OpenSSH ecdsa key
-EC_KEY* crypto::generate_ecdsa_key_pair() {
-    int ret;
-    ECDSA_SIG* sig;
-    EC_KEY* eckey;
-    eckey = EC_KEY_new_by_curve_name(NID_secp256k1);
-
-    if (eckey == NULL)
-    {
-        return NULL;
+crypto::ECDSASignature::ECDSASignature(const ECDSASignature& other) {
+    if (other.signature_) {
+        const BIGNUM* orig_r = ECDSA_SIG_get0_r(other.signature_.get());
+        const BIGNUM* orig_s = ECDSA_SIG_get0_s(other.signature_.get());
+        
+        BIGNUM* dup_r = BN_dup(orig_r);
+        BIGNUM* dup_s = BN_dup(orig_s);
+        
+        if (!dup_r || !dup_s) {
+            if (dup_r) BN_free(dup_r);
+            if (dup_s) BN_free(dup_s);
+            throw std::bad_alloc();
+        }
+        
+        ECDSA_SIG* new_sig = ECDSA_SIG_new();
+        if (!new_sig) {
+            BN_free(dup_r);
+            BN_free(dup_s);
+            throw std::bad_alloc();
+        }
+        
+        if (ECDSA_SIG_set0(new_sig, dup_r, dup_s) != 1) {
+            BN_free(dup_r);
+            BN_free(dup_s);
+            ECDSA_SIG_free(new_sig);
+            throw std::bad_alloc();
+        }
+        
+        signature_.reset(new_sig);
     }
-    if (!EC_KEY_generate_key(eckey))
-    {
-        EC_KEY_free(eckey);
-        return NULL;
-    }
-
-    return eckey;
-    
 }
 
-//Save generated private key to file
-bool crypto::save_ec_private_key(const EC_KEY* eckey, const std::string& filename) {
-    if (!eckey) {
-        return false;
+crypto::ECDSASignature& crypto::ECDSASignature::operator=(const ECDSASignature& other) {
+    if (this == &other) return *this;
+    if (other.signature_) {
+        const BIGNUM* orig_r = ECDSA_SIG_get0_r(other.signature_.get());
+        const BIGNUM* orig_s = ECDSA_SIG_get0_s(other.signature_.get());
+        
+        BIGNUM* dup_r = BN_dup(orig_r);
+        BIGNUM* dup_s = BN_dup(orig_s);
+        
+        if (!dup_r || !dup_s) {
+            if (dup_r) BN_free(dup_r);
+            if (dup_s) BN_free(dup_s);
+            throw std::bad_alloc();
+        }
+        
+        ECDSA_SIG* new_sig = ECDSA_SIG_new();
+        if (!new_sig) {
+            BN_free(dup_r);
+            BN_free(dup_s);
+            throw std::bad_alloc();
+        }
+        
+        if (ECDSA_SIG_set0(new_sig, dup_r, dup_s) != 1) {
+            BN_free(dup_r);
+            BN_free(dup_s);
+            ECDSA_SIG_free(new_sig);
+            throw std::bad_alloc();
+        }
+        
+        signature_.reset(new_sig);
+    } else {
+        signature_.reset();
     }
-
-    BIO* bio = BIO_new_file(filename.c_str(), "wb");
-    if (!bio) {
-        return false;
-    }
-
-    bool success = PEM_write_bio_ECPrivateKey(bio, const_cast<EC_KEY*>(eckey), nullptr, nullptr, 0, nullptr, nullptr);
-
-    BIO_free(bio);
-    return success;
+    return *this;
 }
 
-//Save generated public key to file
-bool crypto::save_ec_public_key(const EC_KEY* eckey, const std::string& filename) {
-    if (!eckey) {
-        return false;
-    }
-
-    BIO* bio = BIO_new_file(filename.c_str(), "wb");
-    if (!bio) {
-        return false;
-    }
-
-    bool success = PEM_write_bio_EC_PUBKEY(bio, eckey);
-
-    BIO_free(bio);
-    return success;
+crypto::ECDSASignature::ECDSASignature(ecdsa_sig_ptr signature)
+    : signature_(std::move(signature)) {
 }
 
-//Free ec key
-void crypto::free_ec_key(const EC_KEY* eckey) {
-    EC_KEY_free(const_cast<EC_KEY*>(eckey));
+bool crypto::ECDSASignature::isValid() const {
+    return signature_ != nullptr;
 }
 
-void crypto::free_ecdsa_sig(const ECDSA_SIG* signature) {
-    ECDSA_SIG_free(const_cast<ECDSA_SIG*>(signature));
+const ECDSA_SIG* crypto::ECDSASignature::get() const {
+    return signature_.get();
 }
 
-//Sign a string message
-ECDSA_SIG* crypto::sign_message_str(const std::string& message, EC_KEY* eckey) {
-    int ret = 0;
-    std::vector<unsigned char> hash = crypto::sha256(message, ret);
-    if (ret == -1) {
-        return NULL;
-    }
-
-    ECDSA_SIG* signature = ECDSA_do_sign(reinterpret_cast<const unsigned char*>(message.c_str()), message.length() + 1, eckey);
-    return signature;
-}
-
-//Sign a transaction
-ECDSA_SIG* crypto::sign_transaction(transaction::serialized_transaction_without_signature* message, EC_KEY* eckey) {
-    int ret = 0;
-    std::array<unsigned char, SHA256_HASH_SIZE> hash = crypto::sha256_transaction_without_signature(message, ret);
-    if (ret == -1) {
-        return NULL;
-    }
-
-    ECDSA_SIG* signature = ECDSA_do_sign(reinterpret_cast<const unsigned char*>(&message), sizeof(transaction::serialized_transaction_without_signature), eckey);
-    return signature;
-}
-
-//Verify that a signature is valid for the given message
-int crypto::verify_signature_string(const std::string& message, ECDSA_SIG* signature, EC_KEY* eckey) {
-
-    return ECDSA_do_verify(reinterpret_cast<const unsigned char*>(message.c_str()), message.length() + 1, signature, eckey);
-}
-
-//Verify that a signature is valid for the given message
-int crypto::verify_signature_hash(crypto::sha256_hash message, ECDSA_SIG* signature, EC_KEY* eckey) {
-   
-    return ECDSA_do_verify(reinterpret_cast<const unsigned char*>(message.data()), message.size(), signature, eckey);
-}
-
-//Load private key from PEM file
-int crypto::load_ecdsa_private_key_from_file(const std::string& filename, EC_KEY* eckey) {
-    BIO* bio = BIO_new_file(filename.c_str(), "r");
-    if (bio == NULL) {
-        return -1;
-    }
-
-    EC_KEY* ec_priv_key = PEM_read_bio_ECPrivateKey(bio, NULL, NULL, NULL);
-    if (ec_priv_key == NULL) {
-        BIO_free_all(bio);
-        return -1;
-    }
-
-    if (EC_KEY_set_private_key(eckey, EC_KEY_get0_private_key(ec_priv_key)) != 1) {
-        BIO_free_all(bio);
-        crypto::free_ec_key(ec_priv_key);
-        return -1;
-    }
-
-    BIO_free_all(bio);
-    crypto::free_ec_key(ec_priv_key);
-
-    return 0;
-
-}
-
-//Load private key from PEM file
-int crypto::load_ecdsa_public_key_from_file(const std::string& filename, EC_KEY* eckey) {
-    BIO* bio = BIO_new_file(filename.c_str(), "r");
-    if (bio == NULL) {
-        return -1;
-    }
-
-    EC_KEY* ec_pub_key = PEM_read_bio_EC_PUBKEY(bio, NULL, NULL, NULL);
-    if (ec_pub_key == NULL) {
-        BIO_free_all(bio);
-        return -2;
-    }
-
-    if (EC_KEY_set_public_key(eckey, EC_KEY_get0_public_key(ec_pub_key)) != 1) {
-        BIO_free_all(bio);
-        crypto::free_ec_key(ec_pub_key);
-        return -3;
-    }
-
-    BIO_free_all(bio);
-    crypto::free_ec_key(ec_pub_key);
-
-    return 0;
-
-}
-
-//Load private key from PEM file
-int crypto::load_ecdsa_public_key_from_string(const std::string& public_key, EC_KEY* eckey) {
-    BIO* bio = BIO_new_mem_buf(public_key.data(), public_key.size());
-    if (bio == NULL) {
-        return -1;
-    }
-
-    EC_KEY* ec_pub_key = PEM_read_bio_EC_PUBKEY(bio, NULL, NULL, NULL);
-    if (ec_pub_key == NULL) {
-        BIO_free_all(bio);
-        return -2;
-    }
-
-    if (EC_KEY_set_public_key(eckey, EC_KEY_get0_public_key(ec_pub_key)) != 1) {
-        BIO_free_all(bio);
-        crypto::free_ec_key(ec_pub_key);
-        return -3;
-    }
-
-    BIO_free_all(bio);
-    crypto::free_ec_key(ec_pub_key);
-
-    return 0;
-
-}
-
-//Return r value as a string representing its hex
-std::string crypto::ecdsa_signature_r_as_hex_string(ECDSA_SIG* signature) {
-    char* r_cstr = BN_bn2hex(ECDSA_SIG_get0_r(signature));
+std::optional<std::string> crypto::ECDSASignature::rHex() const {
+    if (!signature_) return std::nullopt;
+    char* r_cstr = BN_bn2hex(ECDSA_SIG_get0_r(signature_.get()));
     if (r_cstr == NULL) {
-        return std::string();
+        return std::nullopt;
     }
 
-
-    std::string result = std::string(r_cstr);
+    std::string result(r_cstr);
     OPENSSL_free(r_cstr);
     return result;
 }
 
-//Return s value as a string representing it in hex
-std::string crypto::ecdsa_signature_s_as_hex_string(ECDSA_SIG* signature) {
-    char* s_cstr = BN_bn2hex(ECDSA_SIG_get0_s(signature));
+std::optional<std::string> crypto::ECDSASignature::sHex() const {
+    if (!signature_) return std::nullopt;
+    char* s_cstr = BN_bn2hex(ECDSA_SIG_get0_s(signature_.get()));
     if (s_cstr == NULL) {
-        return std::string();
+        return std::nullopt;
     }
 
-    std::string result = std::string(s_cstr);
+    std::string result(s_cstr);
     OPENSSL_free(s_cstr);
     return result;
 }
 
-//Reconstruct a signature from hex strings represneting r and s
-ECDSA_SIG* crypto::ecdsa_signature_from_hex_strings(const std::string& r_str, const std::string& s_str) {
-    BIGNUM* r = NULL;
-    BIGNUM* s = NULL;
+bool crypto::ECDSASignature::writeToBuffer(std::array<uint8_t, ECDSA_SIGNATURE_SIZE>& buffer) const {
+    if (!signature_) return false;
 
-
-    int ret = BN_hex2bn(&r, r_str.c_str());
-    if (ret != r_str.size() || r == NULL) {
-        return NULL;
-    }
-
-    ret = BN_hex2bn(&s, s_str.c_str());
-    if (ret != s_str.size() || s == NULL) {
-        BN_free(r);
-        return NULL;
-    }
-
-    ECDSA_SIG* signature = ECDSA_SIG_new();
-    if (signature == NULL) {
-        throw std::bad_alloc();
-    }
-
-    ret = ECDSA_SIG_set0(signature, r, s);
-    if (ret != 1) {
-        BN_free(r);
-        BN_free(s);
-        ECDSA_SIG_free(signature);
-        return NULL;
-    }
-
-    return signature;
-}
-
-//Write the raw public key to a buffer. Return 0 on success
-int crypto::write_public_key_to_buffer(EC_KEY* ec_key, std::array<uint8_t, EC_PUBLIC_KEY_SIZE_UNCOMPRESSED>& buffer) {
-    //Find required buffer length for this representation
-    const EC_POINT* public_point = EC_KEY_get0_public_key(ec_key);
-    if (!public_point) {
-        return -1;
-    }
-
-    size_t key_len = EC_POINT_point2oct(
-        EC_KEY_get0_group(ec_key), // Get the EC_GROUP from the EC_KEY
-        public_point,
-        POINT_CONVERSION_UNCOMPRESSED, // We want the uncompressed format
-        nullptr, // Pass NULL to get the required length
-        0,       // Pass 0 for length when buf is NULL
-        nullptr  // BN_CTX can be NULL for this operation
-    );
-
-    if (key_len != buffer.size()) {
-        return -1;
-    }
-
-    if (EC_POINT_point2oct(EC_KEY_get0_group(ec_key), public_point, POINT_CONVERSION_UNCOMPRESSED,
-        buffer.data(), key_len, NULL) == 0) {
-        return -1;
-    }
-
-    return 0;
-}
-
-int crypto::write_signature_to_buffer(ECDSA_SIG* signature, std::array<uint8_t, ECDSA_SIGNATURE_SIZE>& buffer) {
     const BIGNUM* signature_r = NULL;
     const BIGNUM* signature_s = NULL;
-
-    ECDSA_SIG_get0(signature, &signature_r, &signature_s);
+    ECDSA_SIG_get0(signature_.get(), &signature_r, &signature_s);
     if (signature_r == NULL || signature_s == NULL) {
-        return -1;
+        return false;
     }
 
     int size_r = BN_num_bytes(signature_r);
     int size_s = BN_num_bytes(signature_s);
 
     if (size_r > ECDSA_SIGNATURE_SIZE / 2 || size_s > ECDSA_SIGNATURE_SIZE / 2) {
-        return -1;
+        return false;
     }
 
     if ((BN_bn2bin(signature_r, buffer.data()) != size_r) || (BN_bn2bin(signature_s, buffer.data() + ECDSA_SIGNATURE_SIZE / 2) != size_s)) {
-        return -1;
+        return false;
     }
 
-    return 0;
+    return true;
+}
+
+std::optional<crypto::ECDSASignature> crypto::ECDSASignature::fromHexStrings(const std::string& r_str, const std::string& s_str) {
+    BIGNUM* r = NULL;
+    BIGNUM* s = NULL;
+
+    int ret = BN_hex2bn(&r, r_str.c_str());
+    if (ret != static_cast<int>(r_str.size()) || r == NULL) {
+        return std::nullopt;
+    }
+
+    ret = BN_hex2bn(&s, s_str.c_str());
+    if (ret != static_cast<int>(s_str.size()) || s == NULL) {
+        BN_free(r);
+        return std::nullopt;
+    }
+
+    ECDSA_SIG* signature = ECDSA_SIG_new();
+    if (signature == NULL) {
+        BN_free(r);
+        BN_free(s);
+        return std::nullopt;
+    }
+
+    crypto::ecdsa_sig_ptr sig_ptr(signature);
+    ret = ECDSA_SIG_set0(sig_ptr.get(), r, s);
+    if (ret != 1) {
+        BN_free(r);
+        BN_free(s);
+        return std::nullopt;
+    }
+
+    return ECDSASignature(std::move(sig_ptr));
+}
+
+crypto::ECDSAKey::ECDSAKey(const ECDSAKey& other) {
+    if (other.key_) {
+        EC_KEY* new_key = EC_KEY_new_by_curve_name(NID_secp256k1);
+        if (!new_key) {
+            throw std::bad_alloc();
+        }
+
+        const EC_POINT* pub_key = EC_KEY_get0_public_key(other.key_.get());
+        if (pub_key) {
+            EC_POINT* dup_pub = EC_POINT_dup(pub_key, EC_KEY_get0_group(other.key_.get()));
+            if (!dup_pub) {
+                EC_KEY_free(new_key);
+                throw std::bad_alloc();
+            }
+            if (!EC_KEY_set_public_key(new_key, dup_pub)) {
+                EC_POINT_free(dup_pub);
+                EC_KEY_free(new_key);
+                throw std::bad_alloc();
+            }
+            EC_POINT_free(dup_pub);
+        }
+
+        key_.reset(new_key);
+    }
+}
+
+crypto::ECDSAKey& crypto::ECDSAKey::operator=(const ECDSAKey& other) {
+    if (this == &other) return *this;
+    if (other.key_) {
+        EC_KEY* new_key = EC_KEY_new_by_curve_name(NID_secp256k1);
+        if (!new_key) {
+            throw std::bad_alloc();
+        }
+        
+        const EC_POINT* pub_key = EC_KEY_get0_public_key(other.key_.get());
+        if (pub_key) {
+            EC_POINT* dup_pub = EC_POINT_dup(pub_key, EC_KEY_get0_group(other.key_.get()));
+            if (!dup_pub) {
+                EC_KEY_free(new_key);
+                throw std::bad_alloc();
+            }
+            if (!EC_KEY_set_public_key(new_key, dup_pub)) {
+                EC_POINT_free(dup_pub);
+                EC_KEY_free(new_key);
+                throw std::bad_alloc();
+            }
+            EC_POINT_free(dup_pub);
+        }
+        
+        key_.reset(new_key);
+    } else {
+        key_.reset();
+    }
+    return *this;
+}
+
+crypto::ECDSAKey::ECDSAKey(eckey_ptr key)
+    : key_(std::move(key)) {
+}
+
+const EC_KEY* crypto::ECDSAKey::get() const {
+    return key_.get();
+}
+
+bool crypto::ECDSAKey::isValid() const {
+    return key_ != nullptr;
+}
+
+std::optional<crypto::ECDSAKey> crypto::ECDSAKey::generateKeyPair() {
+    EC_KEY* eckey = EC_KEY_new_by_curve_name(NID_secp256k1);
+    if (eckey == nullptr) {
+        return std::nullopt;
+    }
+
+    eckey_ptr key_ptr(eckey);
+    if (!EC_KEY_generate_key(key_ptr.get())) {
+        return std::nullopt;
+    }
+
+    return ECDSAKey(std::move(key_ptr));
+}
+
+std::optional<crypto::ECDSAKey> crypto::ECDSAKey::loadPrivateKeyFromFile(const std::string& filename) {
+    BIO* bio = BIO_new_file(filename.c_str(), "r");
+    if (bio == NULL) {
+        return std::nullopt;
+    }
+
+    EC_KEY* ec_key = PEM_read_bio_ECPrivateKey(bio, NULL, NULL, NULL);
+    BIO_free_all(bio);
+    if (ec_key == NULL) {
+        return std::nullopt;
+    }
+
+    return ECDSAKey(eckey_ptr(ec_key));
+}
+
+std::optional<crypto::ECDSAKey> crypto::ECDSAKey::loadPublicKeyFromFile(const std::string& filename) {
+    BIO* bio = BIO_new_file(filename.c_str(), "r");
+    if (bio == NULL) {
+        return std::nullopt;
+    }
+
+    EC_KEY* ec_key = PEM_read_bio_EC_PUBKEY(bio, NULL, NULL, NULL);
+    BIO_free_all(bio);
+    if (ec_key == NULL) {
+        return std::nullopt;
+    }
+
+    return ECDSAKey(eckey_ptr(ec_key));
+}
+
+std::optional<crypto::ECDSAKey> crypto::ECDSAKey::loadPublicKeyFromString(const std::string& public_key) {
+    BIO* bio = BIO_new_mem_buf(public_key.data(), static_cast<int>(public_key.size()));
+    if (bio == NULL) {
+        return std::nullopt;
+    }
+
+    EC_KEY* ec_key = PEM_read_bio_EC_PUBKEY(bio, NULL, NULL, NULL);
+    BIO_free_all(bio);
+    if (ec_key == NULL) {
+        return std::nullopt;
+    }
+
+    return ECDSAKey(eckey_ptr(ec_key));
+}
+
+bool crypto::ECDSAKey::savePrivateKey(const std::string& filename) const {
+    if (!key_) {
+        return false;
+    }
+
+    BIO* bio = BIO_new_file(filename.c_str(), "wb");
+    if (!bio) {
+        return false;
+    }
+
+    bool success = PEM_write_bio_ECPrivateKey(bio, key_.get(), nullptr, nullptr, 0, nullptr, nullptr);
+    BIO_free(bio);
+    return success;
+}
+
+bool crypto::ECDSAKey::savePublicKey(const std::string& filename) const {
+    if (!key_) {
+        return false;
+    }
+
+    BIO* bio = BIO_new_file(filename.c_str(), "wb");
+    if (!bio) {
+        return false;
+    }
+
+    bool success = PEM_write_bio_EC_PUBKEY(bio, key_.get());
+    BIO_free(bio);
+    return success;
+}
+
+bool crypto::ECDSAKey::writePublicKeyToBuffer(std::array<uint8_t, EC_PUBLIC_KEY_SIZE_UNCOMPRESSED>& buffer) const {
+    if (!key_) return false;
+
+    const EC_POINT* public_point = EC_KEY_get0_public_key(key_.get());
+    if (!public_point) {
+        return false;
+    }
+
+    size_t key_len = EC_POINT_point2oct(
+        EC_KEY_get0_group(key_.get()),
+        public_point,
+        POINT_CONVERSION_UNCOMPRESSED,
+        nullptr,
+        0,
+        nullptr);
+
+    if (key_len != buffer.size()) {
+        return false;
+    }
+
+    if (EC_POINT_point2oct(EC_KEY_get0_group(key_.get()), public_point, POINT_CONVERSION_UNCOMPRESSED,
+        buffer.data(), key_len, NULL) == 0) {
+        return false;
+    }
+
+    return true;
+}
+
+std::optional<crypto::ECDSASignature> crypto::ECDSAKey::signHash(const SHA256Hash& message_hash) const {
+    if (!key_) {
+        return std::nullopt;
+    }
+
+    ECDSA_SIG* signature = ECDSA_do_sign(message_hash.data(), static_cast<int>(message_hash.size()), key_.get());
+    if (!signature) {
+        return std::nullopt;
+    }
+
+    return ECDSASignature(ecdsa_sig_ptr(signature));
+}
+
+std::optional<crypto::ECDSASignature> crypto::ECDSAKey::signTransaction(const transaction::serialized_transaction_without_signature& message) const {
+    auto hash = SHA256Hash::hash(message);
+    if (!hash) {
+        return std::nullopt;
+    }
+    return signHash(*hash);
+}
+
+bool crypto::ECDSAKey::verifySignature(const ECDSASignature& signature, const SHA256Hash& message_hash) const {
+    if (!key_ || !signature.isValid()) {
+        return false;
+    }
+    return ECDSA_do_verify(message_hash.data(), static_cast<int>(message_hash.size()), signature.get(), key_.get()) == 1;
 }

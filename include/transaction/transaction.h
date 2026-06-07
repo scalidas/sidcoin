@@ -3,16 +3,14 @@
 
 #include <string>
 #include <chrono>
+#include <optional>
 
 #include <openssl/ec.h>
 #include <vector>
 
 #include "nlohmann/json.hpp"
 
-#include "sidcoin.h"
-#include "sidcoin_constants.h"
-#include "transaction_input.h"
-#include "transaction_output.h"
+#include "constants.h"
 #include "crypto/ecdsa.h"
 
 namespace block {
@@ -25,50 +23,51 @@ namespace transaction {
 		std::array<uint8_t, EC_PUBLIC_KEY_SIZE_UNCOMPRESSED> sender_public_key;
 		std::array<uint8_t, EC_PUBLIC_KEY_SIZE_UNCOMPRESSED> receiver_public_key;
 		std::array<uint8_t, TX_AMOUNT_SIZE> amount;
+		uint32_t nonce;
 		std::array<uint8_t, ECDSA_SIGNATURE_SIZE> signature;
 	};
 
 	struct serialized_transaction_without_signature {
 		std::array<uint8_t, EC_PUBLIC_KEY_SIZE_UNCOMPRESSED> sender_public_key;
 		std::array<uint8_t, EC_PUBLIC_KEY_SIZE_UNCOMPRESSED> receiver_public_key;
+		uint32_t nonce;
 		std::array<uint8_t, TX_AMOUNT_SIZE> amount;
 	};
 
 	class Transaction {
 
-		private:
-			std::string sidcoin_version_;
-			uint64_t block_index_;
-			std::chrono::system_clock::time_point timestamp_;
-			EC_KEY* sender_public_key_;
-			EC_KEY* receiver_public_key_;
-			double amount_;
-			std::vector<transaction::TransactionInput> inputs_;
-			TransactionOutput output1_;
-			TransactionOutput output2_;
+	private:
+		std::string sidcoin_version_;
+		std::chrono::system_clock::time_point timestamp_;
+		crypto::ECDSAKey sender_public_key_;
+		crypto::ECDSAKey receiver_public_key_;
+		double amount_;
+		uint32_t nonce_;
 
-			ECDSA_SIG* sender_signature_;
-		
-		public:
-			Transaction(nlohmann::json transaction_json);
-			
-			~Transaction();
-			Transaction(const Transaction& other);
-			Transaction& operator=(const Transaction& other);
+		crypto::ECDSASignature sender_signature_;
 
-			bool isValid();
+	public:
+		static std::optional<Transaction> from_json(const nlohmann::json& transaction_json);
 
-			friend serialized_transaction_with_signature* serialize_transaction_with_signature(Transaction transaction);
-			friend serialized_transaction_without_signature* serialize_transaction_without_signature(Transaction transaction);
+		Transaction(crypto::ECDSAKey sender_public_key, crypto::ECDSAKey receiver_public_key, double amount, uint32_t nonce) :
+			sender_public_key_(sender_public_key), receiver_public_key_(receiver_public_key), amount_(amount), nonce_(nonce) 
+		{ } ;
 
-			friend class block::Block;
+		Transaction(const Transaction& other) = default;
 
+		~Transaction() = default;
+		Transaction& operator=(const Transaction& other) = default;
 
-		
+		nlohmann::json toJSON() const;
+
+		bool isValid() const;
+
+		friend class block::Block;
+
+		std::optional<serialized_transaction_with_signature> serialize_transaction_with_signature() const;
+		std::optional<serialized_transaction_without_signature> serialize_transaction_without_signature() const;
 	};
 
-	serialized_transaction_with_signature* serialize_transaction_with_signature(Transaction transaction);
-	serialized_transaction_without_signature* serialize_transaction_without_signature(Transaction transaction);
 }
 
 #endif

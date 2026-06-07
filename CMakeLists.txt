@@ -12,6 +12,7 @@ endif()
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+set(OPENSSL_ROOT_DIR C:/Users/calid/OneDrive/Documents/Programming/vcpkg/packages/openssl_x64-windows)
 
 project ("sidcoin")
 
@@ -22,7 +23,7 @@ file(GLOB_RECURSE ALL_SOURCE_FILES
     CONFIGURE_DEPENDS
     "${SOURCE_DIR}/*.cpp"
 )
-add_executable(sidcoin ${ALL_SOURCE_FILES} "src/mining/mining.cpp" "include/mining/mining.h")
+add_executable(sidcoin ${ALL_SOURCE_FILES})
 
 target_link_libraries(sidcoin PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 

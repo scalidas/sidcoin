@@ -26,6 +26,23 @@ std::string utilities::get_current_utc_timestamp_str() {
     return oss.str();
 }
 
+// Get current UTC timestamp as ISO 8601 string
+std::string utilities::get_utc_timestamp_str(std::chrono::system_clock::time_point timepoint) {
+    using namespace std::chrono;
+    std::time_t now_time_t = system_clock::to_time_t(timepoint);
+
+    std::tm utc_tm{};
+#if defined(_WIN32)
+    gmtime_s(&utc_tm, &now_time_t);  // Windows-safe
+#else
+    gmtime_r(&now_time_t, &utc_tm);  // POSIX-safe
+#endif
+
+    std::ostringstream oss;
+    oss << std::put_time(&utc_tm, "%Y-%m-%dT%H:%M:%SZ");  // ISO 8601 UTC
+    return oss.str();
+}
+
 // Cross-platform alternative to timegm
 time_t utilities::timegm_crossplatform(std::tm* tm) {
 #if defined(_WIN32)
