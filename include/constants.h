@@ -11,7 +11,7 @@ const std::string SIDCOIN_VERSION = "v0.1";
 
 //Specifications for blocks, mining
 constexpr int NUM_TRANSACTIONS_PER_BLOCK = 3;
-constexpr int NUM_LEADING_ZEROS_HASH = 0;
+constexpr int NUM_TRAILING_ZEROS_HASH = 30;
 constexpr int MINING_REWARD = 10;
 
 //Cryptography Related

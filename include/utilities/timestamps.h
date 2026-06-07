@@ -15,6 +15,9 @@ namespace utilities {
 	// Cross-platform alternative to timegm
 	time_t timegm_crossplatform(std::tm* tm);
 
+	// Get a system_clock::time_point for right now
+	std::chrono::system_clock::time_point get_current_timestamp();
+
 	// Get a ISO 9601 timestamp string for right now
 	std::string get_current_utc_timestamp_str();
 

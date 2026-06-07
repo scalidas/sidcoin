@@ -81,10 +81,7 @@ std::optional<transaction::Transaction> transaction::Transaction::from_json(cons
 			return std::nullopt;
 		}
 
-		Transaction tx(std::move(*sender_opt), std::move(*receiver_opt), amount, nonce);
-		tx.sidcoin_version_ = std::move(sidcoin_version);
-		tx.timestamp_ = utilities::parse_utc_timestamp_str(timestamp_str);
-		tx.sender_signature_ = std::move(*sig_opt);
+		Transaction tx(sidcoin_version, utilities::parse_utc_timestamp_str(timestamp_str), std::move(*sender_opt), std::move(*receiver_opt), amount, nonce, *sig_opt);
 		return tx;
 	}
 	catch (const std::exception&) {

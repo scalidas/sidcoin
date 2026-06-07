@@ -2,52 +2,63 @@
 #define BLOCK_BLOCK_H
 
 #include <chrono>
+#include <optional>
 #include <string>
 #include <vector>
-#include <optional>
 
 #include "constants.h"
 #include "transaction/transaction.h"
 
 namespace blockchain {
-	class Blockchain;
+class Blockchain;
 }
 
 namespace block {
-	struct serialized_block {
-		std::array<unsigned char, SHA256_HASH_SIZE> prev_hash;
-		std::array<unsigned char, SERIALIZED_TIMESTAMP_SIZE> timestamp;
-		std::array<unsigned char, NONCE_SIZE> nonce;
+struct serialized_block {
+    std::array<unsigned char, SHA256_HASH_SIZE> prev_hash;
+    std::array<unsigned char, SERIALIZED_TIMESTAMP_SIZE> timestamp;
+    uint32_t nonce;
 
-		transaction::serialized_transaction_with_signature tx1;
-		transaction::serialized_transaction_with_signature tx2;
-		transaction::serialized_transaction_with_signature tx3;
-	};
+    std::array<transaction::serialized_transaction_with_signature, NUM_TRANSACTIONS_PER_BLOCK> transactions;
+};
 
-	class Block {
-		private:
-			std::string sidcoin_version_;
-			long long index_;
-			std::chrono::system_clock::time_point timestamp_;
-			std::vector<transaction::Transaction> transactions_;
-			uint32_t nonce_;
-			std::array<unsigned char, SHA256_HASH_SIZE> prev_hash_;
+class Block {
+  private:
+    std::string sidcoin_version_;
+    std::chrono::system_clock::time_point timestamp_;
 
-		public:
-			Block(nlohmann::json block_json);
+    uint64_t height_;
+    std::vector<transaction::Transaction> transactions_;
+    uint32_t nonce_;
 
-			bool isValid() const;
-			bool checkNonce() const;
+    crypto::SHA256Hash prev_hash_;
 
-			void setNonce(int nonce);
+  public:
+    Block(std::string sidcoin_version_, std::chrono::system_clock::time_point timestamp_, uint64_t height,
+          std::vector<transaction::Transaction> transactions, uint32_t nonce_, crypto::SHA256Hash prev_hash_)
+        : sidcoin_version_(sidcoin_version_), timestamp_(timestamp_), height_(height),
+          transactions_(transactions), nonce_(nonce_), prev_hash_(prev_hash_) {}
 
-			friend std::optional<serialized_block> serialize_block(const block::Block& block);
-			friend class blockchain::Blockchain;
+    Block(uint64_t height, std::vector<transaction::Transaction> transactions, uint32_t nonce_,
+          crypto::SHA256Hash prev_hash_)
+        : sidcoin_version_(SIDCOIN_VERSION), timestamp_(std::chrono::system_clock::now()), height_(height),
+          transactions_(transactions), nonce_(nonce_), prev_hash_(prev_hash_) {}
 
-			friend bool operator<(const Block& left, const Block& right);
-		};
+    static std::optional<Block> from_json(nlohmann::json block_json);
 
-	std::optional<serialized_block> serialize_block(const block::Block& block);
-}
+    nlohmann::json toJSON();
+
+    bool isValid() const;
+
+    // Methods for mining
+    void setNonce(uint32_t nonce);
+    bool checkNonce() const;
+
+    std::optional<serialized_block> serialize_block() const;
+
+    friend class blockchain::Blockchain;
+};
+
+} // namespace block
 
 #endif

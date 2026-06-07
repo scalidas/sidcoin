@@ -8,11 +8,15 @@
 
 #include "utilities/timestamps.h"
 
+//Get the timestamp for right now
+std::chrono::system_clock::time_point get_current_timestamp() {
+    return std::chrono::system_clock::now();
+}
+
 // Get current UTC timestamp as ISO 8601 string
 std::string utilities::get_current_utc_timestamp_str() {
-    using namespace std::chrono;
-    auto now = system_clock::now();
-    std::time_t now_time_t = system_clock::to_time_t(now);
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_time_t = std::chrono::system_clock::to_time_t(now);
 
     std::tm utc_tm{};
 #if defined(_WIN32)
@@ -28,8 +32,7 @@ std::string utilities::get_current_utc_timestamp_str() {
 
 // Get current UTC timestamp as ISO 8601 string
 std::string utilities::get_utc_timestamp_str(std::chrono::system_clock::time_point timepoint) {
-    using namespace std::chrono;
-    std::time_t now_time_t = system_clock::to_time_t(timepoint);
+    std::time_t now_time_t = std::chrono::system_clock::to_time_t(timepoint);
 
     std::tm utc_tm{};
 #if defined(_WIN32)

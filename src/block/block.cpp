@@ -9,30 +9,85 @@
 #include "constants.h"
 #include "crypto/sha256.h"
 
-block::Block::Block(nlohmann::json block_json) {
-    sidcoin_version_ = block_json["sidcoin_version"];
-    index_ = block_json["index"];
-    timestamp_ = utilities::parse_utc_timestamp_str(block_json["timestamp"]);
+std::optional<block::Block> block::Block::from_json(nlohmann::json block_json) {
+	try {
+		if (!block_json.is_object()) {
+			return std::nullopt;
+		}
 
-    int num_transactions = block_json["transactions"].size();
-    if (num_transactions != NUM_TRANSACTIONS_PER_BLOCK) {
-        throw std::runtime_error("Incorrect number of transactions");
+		if (!block_json.contains("type") || block_json["type"] != "block") {
+			return std::nullopt;
+		}
+
+		if (!block_json.contains("sidcoin_version") || !block_json["sidcoin_version"].is_string()) {
+			return std::nullopt;
+		}
+
+		if (!block_json.contains("timestamp") || !block_json["timestamp"].is_string()) {
+			return std::nullopt;
+		}
+
+		if (!block_json.contains("transactions") || !block_json["transactions"].is_array()) {
+			return std::nullopt;
+		}
+
+		if (static_cast<int>(block_json["transactions"].size()) != NUM_TRANSACTIONS_PER_BLOCK) {
+			return std::nullopt;
+		}
+
+		if (!block_json.contains("nonce") || !block_json["nonce"].is_number_unsigned()) {
+			return std::nullopt;
+		}
+
+		if (!block_json.contains("prev_hash") || !block_json["prev_hash"].is_string()) {
+			return std::nullopt;
+		}
+
+		std::string sidcoin_version = block_json["sidcoin_version"].get<std::string>();
+		std::string timestamp_str = block_json["timestamp"].get<std::string>();
+		uint32_t nonce = block_json["nonce"].get<uint32_t>();
+		std::string prev_hash_hex = block_json["prev_hash"].get<std::string>();
+
+		auto timestamp = utilities::parse_utc_timestamp_str(timestamp_str);
+
+		std::vector<transaction::Transaction> transactions;
+		for (const auto& tx_json : block_json["transactions"]) {
+			auto tx_opt = transaction::Transaction::from_json(tx_json);
+			if (!tx_opt) {
+				return std::nullopt;
+			}
+			transactions.push_back(std::move(*tx_opt));
+		}
+
+		auto prev_hash_opt = crypto::SHA256Hash::fromHexString(prev_hash_hex);
+		if (!prev_hash_opt) {
+			return std::nullopt;
+		}
+
+		Block block(sidcoin_version, timestamp, 0, std::move(transactions), nonce, std::move(*prev_hash_opt));
+		return block;
+	} catch (const std::exception&) {
+		return std::nullopt;
+	}
+}
+
+nlohmann::json block::Block::toJSON() {
+    using namespace std;
+    nlohmann::json j;
+    j["sidcoin_version"] = sidcoin_version_;
+    j["type"] = "block";
+    j["timestamp"] = utilities::get_utc_timestamp_str(timestamp_);
+
+    nlohmann::json txs = nlohmann::json::array();
+    for (const auto &tx : transactions_) {
+        txs.push_back(tx.toJSON());
     }
+    j["transactions"] = txs;
 
-    for (int i = 0; i < num_transactions; i++) {
-        auto tx_opt = transaction::Transaction::from_json(block_json["transactions"][i]);
-        transaction::Transaction tx = tx_opt.value();
-        transactions_.push_back(std::move(tx));
-    }
+    j["nonce"] = nonce_;
+    j["prev_hash"] = prev_hash_.toHexString();
 
-    nonce_ = block_json["nonce"];
-
-    std::vector<uint8_t> prev_hash_vec = utilities::hex_string_to_bytes(block_json["prev_hash"]);
-    if (prev_hash_vec.size() != SHA256_HASH_SIZE) {
-        throw std::runtime_error("Error loading hash");
-    }
-
-    std::copy(prev_hash_vec.begin(), prev_hash_vec.end(), prev_hash_.begin());
+    return j;
 }
 
 bool block::Block::isValid() const {
@@ -64,16 +119,13 @@ bool block::Block::isValid() const {
     return checkNonce();
 }
 
-void block::Block::setNonce(int nonce) {
+void block::Block::setNonce(uint32_t nonce) {
     nonce_ = nonce;
 }
 
-bool block::operator<(const block::Block& left, const block::Block& right) {
-    return left.nonce_ < right.nonce_;
-}
-
+//Check that the hash with the nonce satisfies the PoW (tight loop for mining)
 bool block::Block::checkNonce() const {
-    auto serialized_bk_opt = serialize_block(*this);
+    auto serialized_bk_opt = serialize_block();
     if (!serialized_bk_opt) {
         return false;
     }
@@ -83,40 +135,46 @@ bool block::Block::checkNonce() const {
         return false;
     }
 
-    for (int i = 0; i < NUM_LEADING_ZEROS_HASH; i++) {
-        if (hash_opt->data()[i] != 0) {
+    int full = NUM_TRAILING_ZEROS_HASH / 8;
+    int rem = NUM_TRAILING_ZEROS_HASH % 8;
+
+    for (int i = 0; i < full; i++)
+        if (hash_opt->data()[31 - i] != 0)
             return false;
-        }
+
+    if (rem) {
+        unsigned char mask = (1 << rem) - 1;
+        return (hash_opt->data()[31 - full] & mask) == 0;
     }
 
     return true;
 }
 
-std::optional<block::serialized_block> block::serialize_block(const block::Block& block) {
+std::optional<block::serialized_block> block::Block::serialize_block() const {
     serialized_block serialized_bk;
-    serialized_bk.prev_hash = block.prev_hash_;
+    
+    std::memcpy(&(serialized_bk.prev_hash), prev_hash_.data(), SHA256_HASH_SIZE);
 
-    utilities::write_timestamp_to_buffer(block.timestamp_, serialized_bk.timestamp);
-    std::memcpy(serialized_bk.nonce.data(), &block.nonce_, NONCE_SIZE);
+    utilities::write_timestamp_to_buffer(timestamp_, serialized_bk.timestamp);
 
-    auto tx1 = block.transactions_[0].serialize_transaction_with_signature();
+    serialized_bk.nonce = nonce_;
+
+    auto tx1 = transactions_[0].serialize_transaction_with_signature();
     if (!tx1) {
         return std::nullopt;
     }
 
-    auto tx2 = block.transactions_[1].serialize_transaction_with_signature();
+    auto tx2 = transactions_[1].serialize_transaction_with_signature();
     if (!tx2) {
         return std::nullopt;
     }
 
-    auto tx3 = block.transactions_[2].serialize_transaction_with_signature();
+    auto tx3 = transactions_[2].serialize_transaction_with_signature();
     if (!tx3) {
         return std::nullopt;
     }
 
-    serialized_bk.tx1 = *tx1;
-    serialized_bk.tx2 = *tx2;
-    serialized_bk.tx3 = *tx3;
+    serialized_bk.transactions = {tx1.value(), tx2.value(), tx3.value()};
 
     return serialized_bk;
 }
